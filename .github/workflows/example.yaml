@@ -17,10 +17,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - run: "echo I'm never called"
-        if: never()
+        if: ${{ !always() }}
   fail:
     name: Fail run if desired
     runs-on: ubuntu-latest
     steps:
-      - run: echo "::error::I'm failing!"
-        if: inputs.fail
+      - run: echo "::error::I'm failing!" && exit 1
+        if: ${{ inputs.fail }}

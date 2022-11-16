@@ -5,7 +5,7 @@ jobs:
   test:
     runs-on: ubuntu-latest
     env:
-      TERRAGRUNT_LOG_LEVEL: debug
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     steps:
       - uses: actions/checkout@v3
       - uses: actions/setup-go@v3
@@ -20,3 +20,5 @@ jobs:
         run: make test
       - name: Upload coverage reports to Codecov with GitHub Action
         uses: codecov/codecov-action@v3
+      - name: run integration tests
+        run: make integration

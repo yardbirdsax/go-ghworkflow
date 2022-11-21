@@ -280,3 +280,14 @@ func TestGetGitRef(t *testing.T) {
 		})
 	}
 }
+
+func TestWithTimeout(t *testing.T) {
+	r := &WorkflowRun{}
+	expectedMaxRetyPeriod := 10 * time.Minute
+	f := WithMaxRetryPeriod(expectedMaxRetyPeriod)
+
+	err := f(r)
+
+	assert.NoError(t, err)
+	assert.Equal(t, expectedMaxRetyPeriod, r.maxRetryPeriod)
+}

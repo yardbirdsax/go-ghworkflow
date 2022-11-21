@@ -55,6 +55,14 @@ func WithGitRef(ref string) workflowOptsFn {
 	}
 }
 
+// WithMaxRetryPeriod sets the maximum time to wait for the workflow run to start and complete.
+func WithMaxRetryPeriod(period time.Duration) workflowOptsFn {
+	return func(r *WorkflowRun) error {
+		r.maxRetryPeriod = period
+		return nil
+	}
+}
+
 // WorkflowRun is a struct representing a single run of a workflow.
 type WorkflowRun struct {
 	// Owner of the repository

@@ -66,7 +66,11 @@ func TestRun(t *testing.T) {
 	expectedInputs := map[string]interface{}{
 		"something_else": "something",
 	}
-	expectedCreatedFilter := fmt.Sprintf(">%s", time.Now().Add(-24 * time.Hour).Truncate(24 * time.Hour).Format("2006-01-02"))
+	expectedCreatedFilter := fmt.Sprintf(
+		"%s..%s",
+		time.Now().Add(-24 * time.Hour).Truncate(24 * time.Hour).Format("2006-01-02"),
+		time.Now().Truncate(24 * time.Hour).Format("2006-01-02"),
+	)
 	t.Setenv("GITHUB_TOKEN", "abcd123456")
 	t.Setenv("GITHUB_EVENT_NAME", "push")
 	t.Setenv("GITHUB_REF", expectedGitRef)

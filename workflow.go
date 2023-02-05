@@ -164,11 +164,9 @@ func (r *WorkflowRun) getWorkflowRun() {
 	operation := func() error {
 		// We only look at the last 24 hours, because there's no way our dispatch
 		// kicked off a workflow in the past.
-		listStartDate := time.Now().Add(-24 * time.Hour).Truncate(24 * time.Hour).Format("2006-01-02")
-		opts := &github.ListWorkflowRunsOptions{
-			Created: fmt.Sprintf(">%s", listStartDate),
-		}
-		workflowRuns, _, err := client.Actions.ListWorkflowRunsByFileName(r.ctx, r.owner, r.repo, *r.Workflow.Path, opts)
+		startDate := time.Now().Add(-24 * time.Hour)
+		endDate := time.Now()
+		workflowRuns, err := getWorkflowRunsByWorkflow(r.ctx, r.owner, r.repo, *r.Workflow.Path, startDate, endDate)
 		if err != nil {
 			return err
 		}
@@ -275,4 +273,18 @@ func (r *WorkflowRun) Wait() *WorkflowRun {
 	}
 
 	return r
+}
+
+func getWorkflowRunsByWorkflow(ctx context.Context, owner string, repo string, path string, startDate time.Time, endDate time.Time) (*github.WorkflowRuns, error) {
+	client, err := getGitHubClient(ctx)
+	if err != nil {
+		return nil, err
+	}
+	listStartDate := startDate.Truncate(24 * time.Hour).Format("2006-01-02")
+	listEndDate := endDate.Truncate(24 * time.Hour).Format("2006-01-02")
+	opts := &github.ListWorkflowRunsOptions{
+		Created: fmt.Sprintf("%s..%s", listStartDate, listEndDate),
+	}
+	workflowRuns, _, err := client.Actions.ListWorkflowRunsByFileName(ctx, owner, repo, path, opts)
+	return workflowRuns, err
 }

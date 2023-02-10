@@ -14,15 +14,16 @@ import (
 )
 
 const (
-	expectedOwner string = "owner"
-	expectedRepo  string = "repo"
+	expectedOwner        string = "owner"
+	expectedRepo         string = "repo"
 	expectedWorkflowPath string = "workflow.yaml"
-	expectedGitRef string = "main"
+	expectedGitRef       string = "main"
 )
 
-type dispatchBody struct{
+type dispatchBody struct {
 	Inputs map[string]string `json:"inputs"`
 }
+
 func (d *dispatchBody) UnmarshalRequest(r *http.Request) error {
 	bodyReader, err := r.GetBody()
 	if err != nil {
@@ -66,7 +67,7 @@ func TestRun(t *testing.T) {
 	expectedInputs := map[string]interface{}{
 		"something_else": "something",
 	}
-	expectedCreatedFilter := fmt.Sprintf(">%s", time.Now().Add(-24 * time.Hour).Truncate(24 * time.Hour).Format("2006-01-02"))
+	expectedCreatedFilter := fmt.Sprintf(">%s", time.Now().Add(-24*time.Hour).Truncate(24*time.Hour).Format("2006-01-02"))
 	t.Setenv("GITHUB_TOKEN", "abcd123456")
 	t.Setenv("GITHUB_EVENT_NAME", "push")
 	t.Setenv("GITHUB_REF", expectedGitRef)
@@ -81,18 +82,18 @@ func TestRun(t *testing.T) {
 		MatchParam("created", expectedCreatedFilter).
 		Reply(200).
 		JSON(
-		map[string]interface{}{
-			"total_count": 2,
-			"workflow_runs": []map[string]interface{}{
-				{
-					"id": otherRunID,
-				},
-				{
-					"id": expectedRunID,
+			map[string]interface{}{
+				"total_count": 2,
+				"workflow_runs": []map[string]interface{}{
+					{
+						"id": otherRunID,
+					},
+					{
+						"id": expectedRunID,
+					},
 				},
 			},
-		},
-	)
+		)
 	gock.New("https://api.github.com").
 		Get(fmt.Sprintf("/repos/%s/%s/actions/runs/%d/jobs", expectedOwner, expectedRepo, otherRunID)).
 		Reply(200).
@@ -138,25 +139,25 @@ func TestWait(t *testing.T) {
 
 	t.Run("suceeded", func(t *testing.T) {
 		gock.New("https://api.github.com").
-		Get(expectedGetRunPath).
-		Reply(200).
-		JSON(map[string]interface{}{
-			"status": "queued",
-			"id": expectedRunID,
-		})
+			Get(expectedGetRunPath).
+			Reply(200).
+			JSON(map[string]interface{}{
+				"status": "queued",
+				"id":     expectedRunID,
+			})
 		gock.New("https://api.github.com").
 			Get(expectedGetRunPath).
 			Reply(200).
 			JSON(map[string]interface{}{
 				"status": "queued",
-				"id": expectedRunID,
+				"id":     expectedRunID,
 			})
-			gock.New("https://api.github.com").
+		gock.New("https://api.github.com").
 			Get(expectedGetRunPath).
 			Reply(200).
 			JSON(map[string]interface{}{
-				"status": "completed",
-				"id": expectedRunID,
+				"status":     "completed",
+				"id":         expectedRunID,
 				"conclusion": "success",
 			})
 
@@ -174,27 +175,27 @@ func TestWait(t *testing.T) {
 
 	t.Run("failed", func(t *testing.T) {
 		gock.New("https://api.github.com").
-		Get(expectedGetRunPath).
-		Reply(200).
-		JSON(map[string]interface{}{
-			"status": "queued",
-			"id": expectedRunID,
-		})
+			Get(expectedGetRunPath).
+			Reply(200).
+			JSON(map[string]interface{}{
+				"status": "queued",
+				"id":     expectedRunID,
+			})
 		gock.New("https://api.github.com").
 			Get(expectedGetRunPath).
 			Reply(200).
 			JSON(map[string]interface{}{
 				"status": "queued",
-				"id": expectedRunID,
+				"id":     expectedRunID,
 			})
-			gock.New("https://api.github.com").
+		gock.New("https://api.github.com").
 			Get(expectedGetRunPath).
 			Reply(200).
 			JSON(map[string]interface{}{
-				"status": "completed",
-				"id": expectedRunID,
+				"status":     "completed",
+				"id":         expectedRunID,
 				"conclusion": "failure",
-				"html_url": "https://gh.my/my",
+				"html_url":   "https://gh.my/my",
 			})
 
 		workflowRun := NewWorkflowRun(expectedWorkflowPath)
@@ -221,14 +222,14 @@ func TestWithGitRef(t *testing.T) {
 }
 
 func TestGetGitRef(t *testing.T) {
-	tests := []struct{
-		name string
-		eventType string
-		gitRef string
-		gitHeadRef string
-		gitSHA string
+	tests := []struct {
+		name           string
+		eventType      string
+		gitRef         string
+		gitHeadRef     string
+		gitSHA         string
 		expectedGitRef string
-		expectError bool
+		expectError    bool
 	}{
 		{
 			"push",
@@ -290,4 +291,78 @@ func TestWithTimeout(t *testing.T) {
 
 	assert.NoError(t, err)
 	assert.Equal(t, expectedMaxRetyPeriod, r.maxRetryPeriod)
+}
+
+func TestWithRepo(t *testing.T) {
+	testCases := []struct {
+		name           string
+		owner          string
+		repo           string
+		input          *WorkflowRun
+		expectedResult *WorkflowRun
+		expectedError  error
+	}{
+		{
+			name:  "both values specified",
+			owner: "owner",
+			repo:  "repo",
+			expectedResult: &WorkflowRun{
+				owner: "owner",
+				repo:  "repo",
+			},
+			expectedError: nil,
+		},
+		{
+			name:  "only repo specified",
+			owner: "",
+			repo:  "repo",
+			expectedResult: &WorkflowRun{
+				owner: "owner",
+				repo:  "repo",
+			},
+			input: &WorkflowRun{
+				owner: "owner",
+				repo:  "repo2",
+			},
+			expectedError: nil,
+		},
+		{
+			name:  "repo not specified",
+			owner: "owner",
+			repo:  "",
+			expectedResult: &WorkflowRun{
+				owner: "owner",
+				repo:  "repo2",
+			},
+			input: &WorkflowRun{
+				owner: "owner",
+				repo:  "repo2",
+			},
+			expectedError: fmt.Errorf("you must specify a repository name at minimum"),
+		},
+	}
+
+	for _, tc := range testCases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			var actualResult *WorkflowRun
+			if tc.input == nil {
+				actualResult = &WorkflowRun{}
+			} else {
+				actualResult = tc.input
+			}
+			f := WithRepo(tc.owner, tc.repo)
+
+			err := f(actualResult)
+
+			assert.EqualValues(t, tc.expectedResult, actualResult)
+			if tc.expectedError == nil {
+				assert.NoError(t, err)
+			} else {
+				assert.EqualError(t, err, tc.expectedError.Error())
+			}
+		})
+	}
+
 }

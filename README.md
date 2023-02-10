@@ -10,6 +10,9 @@ Right now, it mostly works only in the context of something run in a GitHub work
 
 * It sources the token used for authentication from the environment variable `GITHUB_TOKEN`
 * It determines the repository where the called workflow lives using the environment variable `GITHUB_REPOSITORY`.
+  > **Note:** As of version 0.3.0, you can now specify a different repository in
+  > which to create the workflow dispatch event using [the `WithRepo` functional
+  > option](workflow.go#L69).
 
 These things should be made more flexible as time allows to make the library more useful. PRs
 welcome!

@@ -63,6 +63,22 @@ func WithMaxRetryPeriod(period time.Duration) workflowOptsFn {
 	}
 }
 
+// WithRepo lets you specify a different repository where the workflow should be invoked. You
+// must always specify the repository name; if the owner name is a blank string, the current
+// value will not be replaced.
+func WithRepo(owner string, repo string) workflowOptsFn {
+	return func(r *WorkflowRun) error {
+		if strings.TrimSpace(repo) == "" {
+			return fmt.Errorf("you must specify a repository name at minimum")
+		}
+		if strings.TrimSpace(owner) != "" {
+			r.owner = owner
+		}
+		r.repo = repo
+		return nil
+	}
+}
+
 // WorkflowRun is a struct representing a single run of a workflow.
 type WorkflowRun struct {
 	// Owner of the repository
@@ -95,7 +111,7 @@ func NewWorkflowRun(path string, optsFn ...workflowOptsFn) *WorkflowRun {
 			Path: &path,
 		},
 		maxRetryPeriod: 5 * time.Minute,
-		CallerRunID: fmt.Sprint(rand.Int()),
+		CallerRunID:    fmt.Sprint(rand.Int()),
 	}
 
 	workflowRun.getGitHubRepository()
@@ -173,7 +189,7 @@ func (r *WorkflowRun) getWorkflowRun() {
 			return err
 		}
 
-		runLoop:
+	runLoop:
 		for _, run := range workflowRuns.WorkflowRuns {
 			jobs, _, err := client.Actions.ListWorkflowJobs(r.ctx, r.owner, r.repo, *run.ID, nil)
 			if err != nil {
@@ -224,7 +240,7 @@ func (r *WorkflowRun) Run() *WorkflowRun {
 	finalInputs := r.inputs
 	finalInputs["caller_run_id"] = r.CallerRunID
 	workflowDispatchEvent := github.CreateWorkflowDispatchEventRequest{
-		Ref: r.ref,
+		Ref:    r.ref,
 		Inputs: r.inputs,
 	}
 	_, err = client.Actions.CreateWorkflowDispatchEventByFileName(r.ctx, r.owner, r.repo, *r.Workflow.Path, workflowDispatchEvent)

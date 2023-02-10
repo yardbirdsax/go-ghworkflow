@@ -43,7 +43,7 @@ import (
 )
 
 func main {
-  err := ghworkflow.Run(".github/workflows/workflow.yaml").Wait().Error
+  err := ghworkflow.Run("workflow.yaml").Wait().Error
   if err != nil {
     log.Fatal(err)
   }
@@ -63,7 +63,7 @@ func main {
   inputs := map[string]interface{}{
     "something": "some value",
   }
-  err := ghworkflow.Run(".github/workflows/workflow.yaml", WithInputs(inputs)).Wait().Error
+  err := ghworkflow.Run("workflow.yaml", WithInputs(inputs)).Wait().Error
   if err != nil {
     log.Fatal(err)
   }
@@ -85,7 +85,7 @@ you've got a very high rate of merges / commits to your workflow files.)
 
 ```go
 err := ghworkflow.Run(
-  ".github/workflows/workflow.yaml",
+  "workflow.yaml",
   WithInputs(inputs),
   WithGitRef("main")
 ).Wait().Error

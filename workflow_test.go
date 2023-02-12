@@ -295,3 +295,37 @@ func TestWithTimeout(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, expectedMaxRetyPeriod, r.maxRetryPeriod)
 }
+
+func TestGetWorkflowRunByPullRequest(t *testing.T) {
+
+	expectedRunID := 12345678910
+	otherRunID := 978351354658
+	expectedCreatedFilter := fmt.Sprintf(
+		"%s..%s",
+		time.Now().Add(-24 * time.Hour).Truncate(24 * time.Hour).Format("2006-01-02"),
+		time.Now().Truncate(24 * time.Hour).Format("2006-01-02"),
+	)
+	t.Setenv("GITHUB_TOKEN", "abcd123456")
+	t.Setenv("GITHUB_EVENT_NAME", "push")
+	t.Setenv("GITHUB_REF", expectedGitRef)
+	t.Setenv("GITHUB_REPOSITORY", fmt.Sprintf("%s/%s", expectedOwner, expectedRepo))
+	defer gock.Off()
+	gock.New("https://api.github.com").
+		Get(fmt.Sprintf("/repos/%s/%s/actions/workflows/%s/runs", expectedOwner, expectedRepo, expectedWorkflowPath)).
+		MatchParam("created", expectedCreatedFilter).
+		Reply(200).
+		JSON(
+		map[string]interface{}{
+			"total_count": 2,
+			"workflow_runs": []map[string]interface{}{
+				{
+					"id": otherRunID,
+					"pull_requests": []interface{}{},
+				},
+				{
+					"id": expectedRunID,
+				},
+			},
+		},
+	)
+}

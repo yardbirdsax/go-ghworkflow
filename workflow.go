@@ -117,13 +117,18 @@ func (l logLevel) String() string {
 }
 
 type logMessage struct {
-	Level logLevel
+	Level   logLevel
 	Message string
 }
 
+// LogChannel is a channel that can be used to receive messages during long
+// operations, such as waiting for a workflow to complete. It is used with the
+// WithLogChannel functional option.
+type LogChannel chan (logMessage)
+
 // WithLoggingChannel allows you to pass in a Go channel that will receive events from
 // long running operations. Events are sent asynchronously and will not block execution.
-func WithLoggingChannel(logChan chan(logMessage)) workflowOptsFn {
+func WithLoggingChannel(logChan chan (logMessage)) workflowOptsFn {
 	return func(wr *WorkflowRun) error {
 		wr.logChannel = logChan
 		return nil
@@ -155,7 +160,7 @@ type WorkflowRun struct {
 	// The maximum retry period for long running operations
 	maxRetryPeriod time.Duration
 	// A channel for sending log messages to
-	logChannel chan(logMessage)
+	logChannel chan (logMessage)
 }
 
 func NewWorkflowRun(path string, optsFn ...workflowOptsFn) *WorkflowRun {
@@ -326,13 +331,21 @@ func (r *WorkflowRun) Wait() *WorkflowRun {
 			return err
 		}
 		r.WorkflowRun = workflowRun
-		if *workflowRun.Status != "completed" {
+		switch *workflowRun.Status {
+		case "completed":
+			switch *workflowRun.Conclusion {
+			case "failure":
+				return backoff.Permanent(fmt.Errorf("workflow execution failed, see details at '%s'", workflowRun.GetHTMLURL()))
+			default:
+				return nil
+			}
+		case "waiting":
+			msg := fmt.Sprintf("workflow run is waiting on approval, please check run status at: %s", *workflowRun.HTMLURL)
+			r.log(msg, Info)
+			return fmt.Errorf("workflow is awaiting manual approval")
+		default:
 			return fmt.Errorf("workflow is not yet in a completed status")
 		}
-		if *workflowRun.Conclusion == "failure" {
-			return backoff.Permanent(fmt.Errorf("workflow execution failed, see details at '%s'", workflowRun.GetHTMLURL()))
-		}
-		return nil
 	}
 
 	backOff := backoff.NewExponentialBackOff()
@@ -352,7 +365,7 @@ func (r *WorkflowRun) log(message string, level logLevel) {
 		return
 	}
 	msg := logMessage{
-		Level: level,
+		Level:   level,
 		Message: message,
 	}
 	go func() {

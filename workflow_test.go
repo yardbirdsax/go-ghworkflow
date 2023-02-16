@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"sync"
 	"testing"
 	"time"
 
@@ -171,6 +172,7 @@ func TestWait(t *testing.T) {
 		assert.NoError(t, workflowRun.Error)
 		assert.Equal(t, "completed", *workflowRun.WorkflowRun.Status)
 		assert.Equal(t, "success", *workflowRun.WorkflowRun.Conclusion)
+		assert.False(t, gock.IsPending(), "gock has pending requests")
 	})
 
 	t.Run("failed", func(t *testing.T) {
@@ -208,6 +210,71 @@ func TestWait(t *testing.T) {
 		assert.EqualError(t, workflowRun.Error, "workflow execution failed, see details at 'https://gh.my/my'")
 		assert.Equal(t, "completed", *workflowRun.WorkflowRun.Status)
 		assert.Equal(t, "failure", *workflowRun.WorkflowRun.Conclusion)
+		assert.False(t, gock.IsPending(), "gock has pending requests")
+	})
+
+	t.Run("waiting", func(t *testing.T) {
+		htmlURL := fmt.Sprintf("https://github.com/%s/%s/actions/runs/%d", expectedOwner, expectedRepo, expectedRunID)
+		logChan := make(chan (logMessage))
+		gock.New("https://api.github.com").
+			Get(expectedGetRunPath).
+			Reply(200).
+			JSON(map[string]interface{}{
+				"status": "queued",
+				"id":     expectedRunID,
+			})
+		gock.New("https://api.github.com").
+			Get(expectedGetRunPath).
+			Reply(200).
+			JSON(map[string]interface{}{
+				"status":   "waiting",
+				"id":       expectedRunID,
+				"html_url": htmlURL,
+			})
+		gock.New("https://api.github.com").
+			Get(expectedGetRunPath).
+			Reply(200).
+			JSON(map[string]interface{}{
+				"status":   "waiting",
+				"id":       expectedRunID,
+				"html_url": htmlURL,
+			})
+		gock.New("https://api.github.com").
+			Get(expectedGetRunPath).
+			Reply(200).
+			JSON(map[string]interface{}{
+				"status":     "completed",
+				"id":         expectedRunID,
+				"conclusion": "success",
+			})
+
+		workflowRun := NewWorkflowRun(expectedWorkflowPath, WithLoggingChannel(logChan))
+		workflowRun.WorkflowRun = &github.WorkflowRun{
+			ID: &expectedRunID,
+		}
+		wg := sync.WaitGroup{}
+		wg.Add(1)
+		go func() {
+			numLogMessages := 0
+		outerloop:
+			for {
+				select {
+				case <-logChan:
+					numLogMessages++
+				case <-time.After(5 * time.Second):
+					break outerloop
+				}
+			}
+			assert.Equal(t, 2, numLogMessages, "did not receive the expected number of log messages")
+			wg.Done()
+		}()
+		workflowRun.Wait()
+		wg.Wait()
+
+		assert.NoError(t, workflowRun.Error)
+		assert.Equal(t, "completed", *workflowRun.WorkflowRun.Status)
+		assert.Equal(t, "success", *workflowRun.WorkflowRun.Conclusion)
+		assert.False(t, gock.IsPending(), "gock has pending requests")
 	})
 }
 
@@ -283,7 +350,7 @@ func TestGetGitRef(t *testing.T) {
 }
 
 func TestWithTimeout(t *testing.T) {
-	r := &WorkflowRun{}
+	r := NewWorkflowRun("path")
 	expectedMaxRetyPeriod := 10 * time.Minute
 	f := WithMaxRetryPeriod(expectedMaxRetyPeriod)
 
@@ -364,5 +431,30 @@ func TestWithRepo(t *testing.T) {
 			}
 		})
 	}
+}
 
+func TestWithDeadline(t *testing.T) {
+	deadline := time.Now().Add(10 * time.Second)
+	r := NewWorkflowRun("path", WithDeadline(deadline))
+	actualDeadline, ok := r.ctx.Deadline()
+	assert.True(t, ok, "deadline was not set")
+	assert.Equal(t, deadline, actualDeadline, "deadline was not expected value")
+}
+
+func TestLog(t *testing.T) {
+	logChan := make(chan (logMessage))
+	r := NewWorkflowRun("path", WithLoggingChannel(logChan), WithDeadline(time.Now().Add(30*time.Second)))
+	expectedLogMessage := "a log message"
+	expectedLogLevel := Warning
+	go func() {
+		r.log(expectedLogMessage, expectedLogLevel)
+	}()
+
+	select {
+	case <-r.ctx.Done():
+		t.Error("timeout exceeded without receiving message")
+	case actualLogMessage := <-logChan:
+		assert.Equal(t, expectedLogMessage, actualLogMessage.Message)
+		assert.Equal(t, expectedLogLevel, actualLogMessage.Level)
+	}
 }

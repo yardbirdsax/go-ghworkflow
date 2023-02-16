@@ -63,6 +63,14 @@ func WithMaxRetryPeriod(period time.Duration) workflowOptsFn {
 	}
 }
 
+// WithDeadline sets the deadline for the workflow run to start and complete.
+func WithDeadline(deadline time.Time) workflowOptsFn {
+	return func(r *WorkflowRun) error {
+		r.ctx, r.cancelFunc = context.WithDeadline(r.ctx, deadline)
+		return nil
+	}
+}
+
 // WithRepo lets you specify a different repository where the workflow should be invoked. You
 // must always specify the repository name; if the owner name is a blank string, the current
 // value will not be replaced.
@@ -75,6 +83,54 @@ func WithRepo(owner string, repo string) workflowOptsFn {
 			r.owner = owner
 		}
 		r.repo = repo
+		return nil
+	}
+}
+
+// LogLevel defines the severity or level of a log message sent by the library
+// to the configured logging channel.
+type logLevel int
+
+const (
+	Error logLevel = iota
+	Warning
+	Info
+	Debug
+	Trace
+)
+
+func (l logLevel) String() string {
+	switch l {
+	case Error:
+		return "error"
+	case Warning:
+		return "warning"
+	case Info:
+		return "info"
+	case Debug:
+		return "debug"
+	case Trace:
+		return "trace"
+	default:
+		return "unknown"
+	}
+}
+
+type logMessage struct {
+	Level   logLevel
+	Message string
+}
+
+// LogChannel is a channel that can be used to receive messages during long
+// operations, such as waiting for a workflow to complete. It is used with the
+// WithLogChannel functional option.
+type LogChannel chan (logMessage)
+
+// WithLoggingChannel allows you to pass in a Go channel that will receive events from
+// long running operations. Events are sent asynchronously and will not block execution.
+func WithLoggingChannel(logChan chan (logMessage)) workflowOptsFn {
+	return func(wr *WorkflowRun) error {
+		wr.logChannel = logChan
 		return nil
 	}
 }
@@ -99,8 +155,12 @@ type WorkflowRun struct {
 	Error error
 	// The context for the run.
 	ctx context.Context
+	// The cancel function for the context
+	cancelFunc context.CancelFunc
 	// The maximum retry period for long running operations
 	maxRetryPeriod time.Duration
+	// A channel for sending log messages to
+	logChannel chan (logMessage)
 }
 
 func NewWorkflowRun(path string, optsFn ...workflowOptsFn) *WorkflowRun {
@@ -210,7 +270,6 @@ func (r *WorkflowRun) getWorkflowRun() {
 	}
 
 	backOff := backoff.NewExponentialBackOff()
-	backOff.MaxElapsedTime = r.maxRetryPeriod
 	backOffWithContext := backoff.WithContext(backOff, r.ctx)
 
 	err = backoff.Retry(operation, backOffWithContext)
@@ -272,13 +331,21 @@ func (r *WorkflowRun) Wait() *WorkflowRun {
 			return err
 		}
 		r.WorkflowRun = workflowRun
-		if *workflowRun.Status != "completed" {
+		switch *workflowRun.Status {
+		case "completed":
+			switch *workflowRun.Conclusion {
+			case "failure":
+				return backoff.Permanent(fmt.Errorf("workflow execution failed, see details at '%s'", workflowRun.GetHTMLURL()))
+			default:
+				return nil
+			}
+		case "waiting":
+			msg := fmt.Sprintf("workflow run is waiting on approval, please check run status at: %s", *workflowRun.HTMLURL)
+			r.log(msg, Info)
+			return fmt.Errorf("workflow is awaiting manual approval")
+		default:
 			return fmt.Errorf("workflow is not yet in a completed status")
 		}
-		if *workflowRun.Conclusion == "failure" {
-			return backoff.Permanent(fmt.Errorf("workflow execution failed, see details at '%s'", workflowRun.GetHTMLURL()))
-		}
-		return nil
 	}
 
 	backOff := backoff.NewExponentialBackOff()
@@ -291,4 +358,20 @@ func (r *WorkflowRun) Wait() *WorkflowRun {
 	}
 
 	return r
+}
+
+func (r *WorkflowRun) log(message string, level logLevel) {
+	if r.logChannel == nil {
+		return
+	}
+	msg := logMessage{
+		Level:   level,
+		Message: message,
+	}
+	go func() {
+		select {
+		case <-r.ctx.Done():
+		case r.logChannel <- msg:
+		}
+	}()
 }

@@ -283,7 +283,7 @@ func TestGetGitRef(t *testing.T) {
 }
 
 func TestWithTimeout(t *testing.T) {
-	r := &WorkflowRun{}
+	r := NewWorkflowRun("path")
 	expectedMaxRetyPeriod := 10 * time.Minute
 	f := WithMaxRetryPeriod(expectedMaxRetyPeriod)
 
@@ -364,5 +364,22 @@ func TestWithRepo(t *testing.T) {
 			}
 		})
 	}
+}
 
+func TestLog(t *testing.T) {
+	logChan := make(chan(logMessage))
+	r := NewWorkflowRun("path", WithLoggingChannel(logChan), WithDeadline(time.Now().Add(30*time.Second)))
+	expectedLogMessage := "a log message"
+	expectedLogLevel := Warning
+	go func() {
+		r.log(expectedLogMessage, expectedLogLevel)
+	}()
+
+	select {
+	case <- r.ctx.Done():
+		t.Error("timeout exceeded without receiving message")
+	case actualLogMessage := <-logChan:
+		assert.Equal(t, expectedLogMessage, actualLogMessage.Message)
+		assert.Equal(t, expectedLogLevel, actualLogMessage.Level)
+	}
 }

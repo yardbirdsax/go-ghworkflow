@@ -174,9 +174,6 @@ func NewWorkflowRun(path string, optsFn ...workflowOptsFn) *WorkflowRun {
 		CallerRunID:    fmt.Sprint(rand.Int()),
 	}
 
-	workflowRun.getGitHubRepository()
-	workflowRun.getGitRef()
-
 	for _, f := range optsFn {
 		err := f(workflowRun)
 		if err != nil {
@@ -184,6 +181,9 @@ func NewWorkflowRun(path string, optsFn ...workflowOptsFn) *WorkflowRun {
 			return workflowRun
 		}
 	}
+
+	workflowRun.getGitHubRepository()
+	workflowRun.getGitRef()
 
 	return workflowRun
 }

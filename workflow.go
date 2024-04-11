@@ -189,7 +189,7 @@ func NewWorkflowRun(path string, optsFn ...workflowOptsFn) *WorkflowRun {
 }
 
 func (r *WorkflowRun) getGitHubRepository() {
-	if r.Error != nil {
+	if r.Error != nil || (r.repo != "" && r.owner != ""){
 		return
 	}
 	githubRepositoryEnvValue := os.Getenv("GITHUB_REPOSITORY")

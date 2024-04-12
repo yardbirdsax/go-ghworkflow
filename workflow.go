@@ -266,6 +266,7 @@ func (r *WorkflowRun) getWorkflowRun() {
 		if r.WorkflowRun == nil {
 			return fmt.Errorf("no matching workflow run found")
 		}
+		r.log(fmt.Sprintf("url for found job is %q", *r.WorkflowRun.HTMLURL), Info)
 		return nil
 	}
 

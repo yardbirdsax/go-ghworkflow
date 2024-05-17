@@ -3,7 +3,7 @@ module github.com/yardbirdsax/go-ghworkflow
 go 1.19
 
 require (
-	github.com/cenkalti/backoff/v4 v4.2.0
+	github.com/cenkalti/backoff/v4 v4.3.0
 	github.com/google/go-github/v48 v48.2.0
 	github.com/h2non/gock v1.2.0
 	github.com/stretchr/testify v1.8.1
